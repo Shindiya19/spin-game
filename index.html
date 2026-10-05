@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eccelerate</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #1a1f35;
+      --text: #f4f1ea;
+      --muted: #b8b3c8;
+      --gold: #f4c430;
+      --accent: #ff6b4a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse at top, #2a1a4a 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, #1a3a4a 0%, transparent 45%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 48px;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin-bottom: 6px;
+      text-transform: lowercase;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .timer-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      background: #171c30;
+      border: 1px solid #343b5e;
+      border-radius: 999px;
+      padding: 8px 18px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 1.15rem;
+    }
+
+    .timer-wrap.on { display: flex; }
+    .timer-wrap.warn { color: #ff6b4a; }
+    .timer-wrap.done { color: #fdcb6e; }
+
+    .stage {
+      position: relative;
+      width: min(92vw, 460px);
+      aspect-ratio: 1;
+      margin-bottom: 28px;
+    }
+
+    .pointer {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+      width: 0;
+      height: 0;
+      border-left: 16px solid transparent;
+      border-right: 16px solid transparent;
+      border-top: 36px solid var(--gold);
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+    }
+
+    .pointer::after {
+      content: "";
+      position: absolute;
+      top: -42px;
+      left: -10px;
+      width: 20px;
+      height: 20px;
+      background: var(--gold);
+      border-radius: 50%;
+      border: 3px solid #fff8dc;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 10px #2c2548,
+        0 0 0 16px var(--gold),
+        0 18px 50px rgba(0,0,0,0.45);
+      background: #111;
+    }
+
+    .hub {
+      position: absolute;
+      inset: 42%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff, var(--gold) 45%, #c99212);
+      z-index: 3;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 22px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      border-radius: 999px;
+      padding: 14px 28px;
+      font-size: 1rem;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+
+    button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .spin {
+      background: linear-gradient(180deg, #ff8a65, var(--accent));
+      color: white;
+      min-width: 180px;
+      box-shadow: 0 8px 24px rgba(255, 107, 74, 0.35);
+    }
+
+    .ghost {
+      background: #2b3250;
+      color: var(--text);
+    }
+
+    .result {
+      min-height: 88px;
+      width: min(96vw, 720px);
+      background: var(--panel);
+      border: 1px solid #343b5e;
+      border-radius: 16px;
+      padding: 18px 16px 22px;
+      text-align: center;
+    }
+
+    .result h2 {
+      font-size: 1.35rem;
+      margin-bottom: 8px;
+      color: var(--gold);
+    }
+
+    .result p { color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
+
+    .play-area { margin-top: 8px; }
+
+    .phrase-card {
+      display: inline-block;
+      margin: 8px 0 14px;
+      padding: 16px 22px;
+      border-radius: 12px;
+      background: #101428;
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+
+    .phrase-puzzles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+      gap: 12px;
+      margin: 12px auto 16px;
+      max-width: 660px;
+    }
+
+    .phrase-puzzle {
+      min-width: 0;
+      padding: 8px;
+      border-radius: 10px;
+      background: #101428;
+    }
+
+    .phrase-puzzle img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 6px;
+    }
+
+    .phrase-answer {
+      margin: 8px 0 0 !important;
+      font-weight: 800;
+    }
+
+    .phrase-answer.hidden-phrase { filter: blur(8px); user-select: none; }
+
+    .score { color: var(--gold); font-weight: 700; margin-top: 8px; }
+
+    .legend {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      max-width: 560px;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #171c30;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .ws-wrap {
+      overflow: auto;
+      max-width: 100%;
+    }
+
+    table.ws {
+      border-collapse: collapse;
+      margin: 10px auto;
+      user-select: none;
+      background: #fff;
+      color: #111;
+    }
+
+    table.ws td {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #111;
+      text-align: center;
+      font-weight: 800;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    table.ws td.sel { background: #f4c430; }
+    table.ws td.found { background: #3ddc84; color: #111; }
+
+    .words {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin: 10px 0;
+    }
+
+    .words span {
+      background: #101428;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+    }
+
+    .words span.got {
+      background: #0d3b2e;
+      color: #3ddc84;
+      text-decoration: line-through;
+    }
+
+    .stroop-board {
+      background: #fff;
+      color: #111;
+      border-radius: 12px;
+      padding: 18px 10px 10px;
+      margin: 8px auto 14px;
+      max-width: 520px;
+    }
+
+    .stroop-row {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .stroop-item {
+      font-size: clamp(1.3rem, 4vw, 2rem);
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 3px solid transparent;
+    }
+
+  </style>
+</head>
+<body>
+  <h1>eccelerate</h1>
+  <p class="subtitle">Spin the wheel. Finish the activity before the minute is up.</p>
+
+  <div class="timer-wrap" id="timerWrap">
+    <span>Time</span>
+    <span id="timer">1:00</span>
+  </div>
+
+  <div class="stage">
+    <div class="pointer" aria-hidden="true"></div>
+    <canvas id="wheel" width="900" height="900"></canvas>
+    <div class="hub"></div>
+  </div>
+
+  <div class="controls">
+    <button class="spin" id="spinBtn" type="button">SPIN</button>
+  </div>
+
+  <div class="result" id="result" aria-live="polite">
+    <h2>Ready?</h2>
+    <p>Hit SPIN. Each activity is random and lasts 1 minute.</p>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <script>
+    const slices = [
+      { id: "phrase", label: "Guess the phrase or word", color: "#6c5ce7" },
+      { id: "search", label: "Word Search", color: "#00b894" },
+      { id: "game", label: "Game", color: "#0984e3" },
+      { id: "colour", label: "Say the colour not the word", color: "#e17055" },
+      { id: "again", label: "Try again", color: "#fdcb6e" }
+    ];
+
+    const picturePuzzles = [
+      { image: "01_brain_storm.jpg", answer: "Brainstorm" },
+      { image: "02_skeleton.jpg", answer: "Deadline" },
+      { image: "03_desk_items.jpg", answer: "Remote Work" },
+      { image: "04_balance.jpg", answer: "Work Life Balance" },
+      { image: "05_on_boarding.jpg", answer: "Onboarding" },
+      { image: "06_under_scrutiny.jpg", answer: "Micromanagement" },
+      { image: "08_tongue.jpg", answer: "Tongue Twister" },
+      { image: "09_noon_good.jpg", answer: "Good Afternoon" },
+      { image: "10_fa_st.jpg", answer: "Breakfast" },
+      { image: "12_baked.jpg", answer: "Half-baked" },
+      { image: "13_stance.jpg", answer: "For instance" },
+      { image: "14_secret.jpg", answer: "Top Secret" },
+      { image: "11_on_line.jpg", answer: "Online" }
+    ];
+
+    const partyGames = [
+      "Charades — act it out, no talking.",
+      "20 questions — yes/no only.",
+      "Categories — name items in a theme until someone repeats or stalls.",
+      "Two truths and a lie.",
+      "Would you rather — pick a side and defend it.",
+      "Rhyme time — keep a rhyme chain going."
+    ];
+
+    const wsGrid = [
+      "DAIMLERHPYZDVQ",
+      "CUMMINSSOCEEYV",
+      "HHJVUNNIKOLASG",
+      "NOXERQGWODHZUU",
+      "SZJNNAVISTARSF",
+      "HBCLRBESFUNTET",
+      "WSBLDEUTZDZCUC",
+      "HPLHFORDOTOSAN",
+      "EMANKPBROHTGNC",
+      "LNPMVNBSKLAPRY",
+      "JCBRVGMATITKOL",
+      "NZHTTDEJSUDVDE",
+      "UOMZKNXHATZXWY",
+      "KYBNZCFFPTFTZY"
+    ];
+
+    const oemWords = [
+      { label: "DAIMLER", word: "DAIMLER" },
+      { label: "CUMMINS", word: "CUMMINS" },
+      { label: "NIKOLA", word: "NIKOLA" },
+      { label: "NAVISTAR", word: "NAVISTAR" },
+      { label: "DEUTZ", word: "DEUTZ" },
+      { label: "FORD OTOSAN", word: "FORDOTOSAN" },
+      { label: "MAN", word: "MAN" },
+      { label: "HATZ", word: "HATZ" },
+      { label: "JCB", word: "JCB" },
+      { label: "FPT", word: "FPT" }
+    ];
+
+    const stroopItems = [
+      { word: "Yellow", ink: "Green" },
+      { word: "Blue", ink: "Red" },
+      { word: "Orange", ink: "Blue" },
+      { word: "Black", ink: "Yellow" },
+      { word: "Red", ink: "Blue" },
+      { word: "Green", ink: "Black" },
+      { word: "Purple", ink: "Red" },
+      { word: "Yellow", ink: "Blue" },
+      { word: "Red", ink: "Green" },
+      { word: "Orange", ink: "Black" },
+      { word: "Green", ink: "Red" },
+      { word: "Black", ink: "Yellow" },
+      { word: "Blue", ink: "Green" },
+      { word: "Red", ink: "Blue" },
+      { word: "Purple", ink: "Black" },
+      { word: "Green", ink: "Blue" },
+      { word: "Blue", ink: "Red" },
+      { word: "Orange", ink: "Green" }
+    ];
+
+    const inkHex = {
+      Yellow: "#f4d03f",
+      Blue: "#1e5eff",
+      Orange: "#e67e22",
+      Black: "#111111",
+      Red: "#e74c3c",
+      Green: "#27ae60",
+      Purple: "#8e44ad"
+    };
+
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const spinBtn = document.getElementById("spinBtn");
+    const result = document.getElementById("result");
+    const legend = document.getElementById("legend");
+    const timerWrap = document.getElementById("timerWrap");
+    const timerEl = document.getElementById("timer");
+
+    const size = canvas.width;
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 8;
+    const arc = (Math.PI * 2) / slices.length;
+    const twoPi = Math.PI * 2;
+
+    let rotation = 0;
+    let spinning = false;
+    let timerId = null;
+    let timeLeft = 60;
+    let locked = false;
+    let wsFound = new Set();
+    let drag = null;
+
+    slices.forEach((s) => {
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.innerHTML = `<span class="dot" style="background:${s.color}"></span>${s.label}`;
+      legend.appendChild(chip);
+    });
+
+    function randInt(n) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] % n;
+    }
+
+    function rand() {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] / 4294967296;
+    }
+
+    function wrapText(text, maxWidth) {
+      const words = text.split(" ");
+      const lines = [];
+      let line = "";
+      words.forEach((word) => {
+        const test = line ? line + " " + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      });
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    function drawWheel() {
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+
+      slices.forEach((slice, i) => {
+        const start = i * arc - Math.PI / 2;
+        const end = start + arc;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, start, end);
+        ctx.closePath();
+        ctx.fillStyle = slice.color;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.rotate(start + arc / 2);
+        ctx.fillStyle = slice.id === "again" ? "#3d2b00" : "#fff";
+        ctx.font = "bold 28px Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const lines = wrapText(slice.label, radius * 0.62);
+        const lineHeight = 32;
+        const startY = -((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((line, idx) => {
+          ctx.fillText(line, radius * 0.58, startY + idx * lineHeight);
+        });
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function pick(list) {
+      return list[randInt(list.length)];
+    }
+
+    function stopTimer() {
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    function formatTime(s) {
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return m + ":" + String(r).padStart(2, "0");
+    }
+
+    function startTimer(onEnd) {
+      stopTimer();
+      locked = false;
+      timeLeft = 60;
+      timerEl.textContent = formatTime(timeLeft);
+      timerWrap.className = "timer-wrap on";
+      timerId = setInterval(() => {
+        timeLeft -= 1;
+        timerEl.textContent = formatTime(Math.max(0, timeLeft));
+        timerWrap.classList.toggle("warn", timeLeft <= 10);
+        if (timeLeft <= 0) {
+          stopTimer();
+          locked = true;
+          timerWrap.className = "timer-wrap on done";
+          timerEl.textContent = "0:00";
+          onEnd();
+        }
+      }, 1000);
+    }
+
+    function hideTimer() {
+      stopTimer();
+      timerWrap.className = "timer-wrap";
+    }
+
+    function timeUpMessage(extra) {
+      const note = document.createElement("p");
+      note.className = "score";
+      note.textContent = extra || "Time is up.";
+      result.appendChild(note);
+    }
+
+    function showActivity(slice) {
+      locked = false;
+      if (slice.id === "again") {
+        hideTimer();
+        result.innerHTML = "<h2>Try again</h2><p>No activity this spin. Hit SPIN for another go.</p>";
+        return;
+      }
+
+      startTimer(() => {
+        if (slice.id === "colour") return;
+        const live = document.getElementById("statusLine");
+        if (live) live.textContent = "Time is up — 1 minute is over.";
+        else timeUpMessage("Time is up — 1 minute is over.");
+      });
+
+      if (slice.id === "phrase") {
+        const puzzles = [...picturePuzzles];
+        for (let i = puzzles.length - 1; i > 0; i -= 1) {
+          const j = randInt(i + 1);
+          [puzzles[i], puzzles[j]] = [puzzles[j], puzzles[i]];
+        }
+        const round = puzzles.slice(0, 5);
+        result.innerHTML = `
+          <h2>Guess the phrase or word</h2>
+          <p>Guess the words shown by these pictures. You have 1 minute.</p>
+          <div class="play-area">
+            <div class="phrase-puzzles">
+              ${round.map((puzzle, index) => `
+                <div class="phrase-puzzle">
+                  <img src="${puzzle.image}" alt="Picture clue ${index + 1}" />
+                  <p class="phrase-answer hidden-phrase" aria-hidden="true">${puzzle.answer}</p>
+                </div>`).join("")}
+            </div>
+            <div>
+              <button class="ghost" type="button" id="revealBtn">Reveal answers</button>
+            </div>
+            <p class="score" id="statusLine"></p>
+          </div>`;
+        document.getElementById("revealBtn").onclick = () => {
+          document.querySelectorAll(".phrase-answer").forEach((answer) => {
+            answer.classList.remove("hidden-phrase");
+            answer.setAttribute("aria-hidden", "false");
+          });
+        };
+        return;
+      }
+
+      if (slice.id === "search") {
+        result.innerHTML = `
+          <h2>Word Search — Find the OEM</h2>
+          <p>Drag across letters to find OEM names. 1 minute.</p>
+          <div class="words" id="wordBank"></div>
+          <div class="ws-wrap"><table class="ws" id="wsTable"></table></div>
+          <p class="score" id="statusLine">Found 0 / ${oemWords.length}</p>`;
+        wsFound = new Set();
+        renderWordBank();
+        renderGrid();
+        return;
+      }
+
+      if (slice.id === "game") {
+        result.innerHTML = `
+          <h2>Game</h2>
+          <p>${pick(partyGames)}</p>
+          <p>Play it now — the timer is 1 minute.</p>
+          <p class="score" id="statusLine"></p>`;
+        return;
+      }
+
+      result.innerHTML = `
+        <h2>Say the colour, not the word</h2>
+        <div class="stroop-board" id="stroopBoard"></div>
+      `;
+      renderStroop();
+    }
+
+    function renderWordBank() {
+      const bank = document.getElementById("wordBank");
+      bank.innerHTML = oemWords.map(({ label, word }) =>
+        `<span class="${wsFound.has(word) ? "got" : ""}">${label}</span>`
+      ).join("");
+    }
+
+    function renderGrid() {
+      const table = document.getElementById("wsTable");
+      table.innerHTML = "";
+      wsGrid.forEach((row, r) => {
+        const tr = document.createElement("tr");
+        [...row].forEach((ch, c) => {
+          const td = document.createElement("td");
+          td.textContent = ch;
+          td.dataset.r = r;
+          td.dataset.c = c;
+          td.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            if (locked) return;
+            drag = { r, c, cells: [[r, c]] };
+            clearSel();
+            td.classList.add("sel");
+          });
+          td.addEventListener("mouseenter", () => {
+            if (!drag || locked) return;
+            const line = lineCells(drag.r, drag.c, r, c);
+            if (!line) return;
+            drag.cells = line;
+            clearSel();
+            line.forEach(([rr, cc]) => {
+              table.rows[rr].cells[cc].classList.add("sel");
+            });
+          });
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+    }
+
+    function clearSel() {
+      document.querySelectorAll("table.ws td.sel").forEach((td) => td.classList.remove("sel"));
+    }
+
+    function lineCells(r1, c1, r2, c2) {
+      const dr = Math.sign(r2 - r1);
+      const dc = Math.sign(c2 - c1);
+      const lenR = Math.abs(r2 - r1);
+      const lenC = Math.abs(c2 - c1);
+      if (!(r1 === r2 || c1 === c2 || lenR === lenC)) return null;
+      const steps = Math.max(lenR, lenC);
+      const cells = [];
+      for (let i = 0; i <= steps; i++) cells.push([r1 + dr * i, c1 + dc * i]);
+      return cells;
+    }
+
+    function onDragEnd() {
+      if (!drag || locked) {
+        drag = null;
+        return;
+      }
+      const word = drag.cells.map(([r, c]) => wsGrid[r][c]).join("");
+      const rev = [...word].reverse().join("");
+      const hit = oemWords.find(({ word: target }) => target === word || target === rev)?.word;
+      if (hit && !wsFound.has(hit)) {
+        wsFound.add(hit);
+        drag.cells.forEach(([r, c]) => {
+          document.querySelector(`#wsTable`).rows[r].cells[c].classList.add("found");
+        });
+        renderWordBank();
+        const status = document.getElementById("statusLine");
+        status.textContent = "Found " + wsFound.size + " / " + oemWords.length;
+        if (wsFound.size === oemWords.length) {
+          stopTimer();
+          locked = true;
+          status.textContent = "All OEMs found!";
+        }
+      }
+      clearSel();
+      document.querySelectorAll("table.ws td.found").forEach((td) => td.classList.add("found"));
+      drag = null;
+    }
+
+    function renderStroop() {
+      const board = document.getElementById("stroopBoard");
+      board.innerHTML = "";
+      for (let i = 0; i < stroopItems.length; i += 3) {
+        const row = document.createElement("div");
+        row.className = "stroop-row";
+        stroopItems.slice(i, i + 3).forEach((item, k) => {
+          const el = document.createElement("span");
+          el.className = "stroop-item";
+          el.textContent = item.word;
+          el.style.color = inkHex[item.ink];
+          row.appendChild(el);
+        });
+        board.appendChild(row);
+      }
+
+    }
+
+    function spin() {
+      if (spinning) return;
+      spinning = true;
+      spinBtn.disabled = true;
+      hideTimer();
+      result.innerHTML = "<h2>Spinning...</h2><p>Landing on a random activity.</p>";
+
+      const index = randInt(slices.length);
+      const pad = arc * 0.18;
+      const offset = pad + rand() * (arc - 2 * pad);
+      const targetLocal = index * arc - Math.PI / 2 + offset;
+      const targetRot = -Math.PI / 2 - targetLocal;
+      const start = rotation;
+      let delta = ((targetRot - start) % twoPi + twoPi) % twoPi;
+      delta += (5 + randInt(4)) * twoPi;
+      const duration = 3800 + rand() * 900;
+      const t0 = performance.now();
+
+      function frame(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        rotation = start + delta * easeOutCubic(t);
+        drawWheel();
+        if (t < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          rotation = start + delta;
+          drawWheel();
+          showActivity(slices[index]);
+          spinning = false;
+          spinBtn.disabled = false;
+        }
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    spinBtn.addEventListener("click", spin);
+    document.addEventListener("mouseup", onDragEnd);
+    drawWheel();
+  </script>
+</body>
+</html>
